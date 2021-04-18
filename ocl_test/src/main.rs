@@ -2,6 +2,8 @@ extern crate ocl;
 use ocl_test::*;
 use ocl_test::util::ModPow;
 
+use std::env;
+
 
 /*
 use this prime : 4610415792919412737
@@ -23,8 +25,13 @@ fn main() {
     let r2 = 1266473570726112470u64;
     let r3 = 2230453091198852918u64;
 
-    let mut pss = OclContext::<u64>::new(p, (r2 as u128).modpow(4u128, p as u128) as u64, r3, 
-        512/4, 729, 60000, 100, 700).unwrap();
+    let args: Vec<String> = env::args().collect();
+    let r2_divisor = args[1].parse::<usize>().unwrap(),
+    let total_len = args[2].parse::<usize>().unwrap(),
+    let packing_len = args[3].parse::<usize>().unwrap(),
+
+    let mut pss = OclContext::<u64>::new(p, (r2 as u128).modpow(r2_divisor as u128, p as u128) as u64, r3, 
+        512/r2_divisor, 729, total_len, packing_len, 700).unwrap();
     //prime: u64, root2: u64, root3:u64, degree2: usize, degree3: usize, 
     //total_len: usize, packing_len: usize, num_shares: usize
     
