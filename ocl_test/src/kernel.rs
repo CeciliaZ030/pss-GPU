@@ -2,8 +2,8 @@ pub static NTT_INVERSE2: &str = r#"
 
 void radix2_bitreverse (
 	__global ulong* source,
-  	const int base,
-  	const int L)
+  	const ulong base,
+  	const ulong L)
 {
 	int j = 0;
 	for (int i = 0; i < L; i++) {
@@ -25,10 +25,10 @@ void radix2_bitreverse (
 void radix2_dft (
 	__global ulong* source,
 	__global const ulong* roots2,
-	const int base,
-  	const int L,
-	const int L_inv,
-  	const int L_bit_num,
+	const ulong base,
+  	const ulong L,
+	const ulong L_inv,
+  	const ulong L_bit_num,
   	const ulong P)
 {
 	for (int s = 0; s < L_bit_num + 1; s++) {
@@ -65,9 +65,9 @@ void radix2_dft (
 __kernel void ntt_inverse2 (
 	__global ulong* source,
 	__global ulong* roots2,		//inversed
-  	const int L,
-  	const int L_inv,
-  	const int L_bit_num,
+  	const ulong L,
+  	const ulong L_inv,
+  	const ulong L_bit_num,
   	const ulong P)
 {
 	uint const base = get_global_id(0) * L;
@@ -88,8 +88,8 @@ pub static NTT_TRANSFORM3_PART1: &str = r#"
 
 void radix3_bitreverse (
 	__global ulong* source, 
-	const int base,
-  	const int L)
+	const ulong base,
+  	const ulong L)
 {
 	int L_trigits_num ="#;
 
@@ -120,8 +120,8 @@ pub static NTT_TRANSFORM3_PART3: &str = r#"] = {0};
 void radix3_dft (
 	__global ulong* source,
 	__global ulong* roots3,
-	const int base,
-	const int L,
+	const ulong base,
+	const ulong L,
 	const ulong P)
 {
 	ulong w = roots3[L/3];
@@ -152,7 +152,7 @@ void radix3_dft (
 __kernel void ntt_transform3 (
 	__global ulong* source, 
 	__global ulong* roots3,
-  	const int L,
+  	const ulong L,
   	const ulong P)
 {
 	uint const base = get_global_id(0) * L;
