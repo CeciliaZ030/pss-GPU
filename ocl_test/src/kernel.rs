@@ -29,11 +29,12 @@ void radix2_dft (
   	const int L,
 	const int L_inv,
   	const int L_bit_num,
-  	const int P)
+  	const ulong P)
 {
 	for (int s = 0; s < L_bit_num + 1; s++) {
 		int m = (int) pown((float) 2, s);
 		int i = 0;
+
 		while (i < L) {
 			int j = 0;
 			while (j < m/2) {
