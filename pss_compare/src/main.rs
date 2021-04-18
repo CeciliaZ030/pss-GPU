@@ -28,13 +28,11 @@ fn main() {
     let r2_divisor = args[1].parse::<usize>().unwrap();
     let total_len = args[2].parse::<usize>().unwrap();
     let packing_len = args[3].parse::<usize>().unwrap();
-    println!("here1");
     let new_r2 = (r2 as u128).modpow(r2_divisor as u128, p as u128) as u128;
     let mut pss = PackedSecretSharing::new(p, new_r2, r3, 
         512/r2_divisor, 729, total_len, packing_len, 700);
     //prime: u128, root2: u128, root3:u128, degree2: usize, degree3: usize, 
     //total_len: usize, packing_len: usize, num_shares: usize
-    println!("here");
     let mut secrets = vec![0u128; total_len];
     for i in 0..total_len {
         secrets[i] = (i * i + 1) as u128;
