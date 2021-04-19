@@ -277,7 +277,7 @@ where T: Unsigned + Copy + Debug + TryFrom<u128> + Into<u128> +
 
 fn print_elapsed(title: &str, start: time::Timespec) {
     let time_elapsed = time::get_time() - start;
-    let elapsed_ms = time_elapsed.num_milliseconds();
+    let elapsed_ms = time_elapsed.num_microseconds();
     let separator = if title.len() > 0 { ": " } else { "" };
-    println!("    {}{}: {}.{:03}", title, separator, time_elapsed.num_seconds(), elapsed_ms);
+    println!("    {}{}: {} us", title, separator, elapsed_ms.unwrap());
 }
