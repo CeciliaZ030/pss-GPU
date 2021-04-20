@@ -205,10 +205,12 @@ where T: Unsigned + Copy + Debug + TryFrom<u128> + Into<u128> +
         // Enqueue kernel: send to device and run it
         unsafe {
             kernel
-            .set_default_local_work_size((1,L2).into())
+            // 1 poly / local work goup
+            //.set_default_local_work_size((1, L2).into())
             .enq()
             .unwrap();
         }
+        println!("{:?}", kernel);
         ocl_pq.queue().finish();
         print_elapsed("total elapsed", kern_start);
 
@@ -243,20 +245,20 @@ where T: Unsigned + Copy + Debug + TryFrom<u128> + Into<u128> +
 
         println!("Enqueuing ntt_transform3 kernel");
         let kern_start = time::get_time();
-        let kernel = ocl_pq.kernel_builder("ntt_transform3")
+        let mut kernel = ocl_pq.kernel_builder("ntt_transform3")
             .arg(&source)
             .arg(&roots3)
             .arg(L3)
             .arg(self.prime)
-            .build();
+            .build()
+            .unwrap();
         // Enqueue kernel: send to device and run it
         unsafe {
             kernel
-            .unwrap()
-            .set_default_local_work_size((1,L3).into())
             .enq()
             .unwrap();
         }
+        println!("{:?}", kernel);
         ocl_pq.queue().finish();
         print_elapsed("total elapsed", kern_start);
 
