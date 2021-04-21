@@ -248,7 +248,7 @@ where T: Unsigned + Copy + Debug + TryFrom<u128> + Into<u128> +
         let mut kernel = ocl_pq.kernel_builder("ntt_transform3")
             .arg(&source)
             .arg(&roots3)
-            .arg(L3)
+            .arg(L3 as u64)
             .arg(self.prime)
             .build()
             .unwrap();
