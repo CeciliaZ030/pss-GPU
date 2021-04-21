@@ -196,7 +196,7 @@ where T: Unsigned + Copy + Debug + TryFrom<u128> + Into<u128> +
         let mut kernel = ocl_pq.kernel_builder("ntt_inverse2")
             .arg(&source)
             .arg(&roots2)
-            .arg(L2)
+            .arg(L2 as u64)
             .arg(self.roots2[1].clone())
             .arg(L2_bit_mum)
             .arg(self.prime)
