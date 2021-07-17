@@ -18,14 +18,14 @@ mod kernel;
 use util::*;
 use kernel::*;
 
-pub struct OclContext {
+pub struct OclContext<T> {
 
-    pub compute_units: u64,
+    pub compute_units: u128,
     pro_que: ocl::ProQue,
 
-    prime: u64,
-    roots2: Vec<u64>,
-    roots3: Vec<u64>,
+    prime: T,
+    roots2: Vec<T>,
+    roots3: Vec<T>,
     degree2: usize,
     degree3: usize,
 
@@ -37,13 +37,16 @@ pub struct OclContext {
 
 
 
-impl OclContext{
-
-    /* Use u64 because any T implements Into<u64>
+impl<T> OclContext<T> 
+where T: Unsigned + Copy + Debug + TryFrom<u128> + Into<u128> + 
+        SampleUniform + PartialOrd + OclPrm + HasMax + ModPow,
+      <T as TryFrom<u128>>::Error:Debug
+{
+    /* Use u128 because any T implements Into<u128>
     */
 
-    pub fn new(prime: u64, root2: u64, root3: u64, 
-               degree2: usize, degree3: usize, total_len: usize, packing_len: usize, num_shares: usize) -> Option<OclContext> {
+    pub fn new(prime: T, root2: T, root3:T, 
+               degree2: usize, degree3: usize, total_len: usize, packing_len: usize, num_shares: usize) -> Option<OclContext<T>> {
         
         println!("{:?} {:?} {:?} {:?} {:?}", degree2, degree3, total_len, packing_len, num_shares);
         // wich Device should we choose?
@@ -99,19 +102,21 @@ impl OclContext{
         assert!(degree2 <= num_shares);
         assert!(num_shares <= degree3);
 
-        let P = prime;
-        let mut inv_roots2: Vec<u64> = Vec::new();
-        let inv_root2 = root2.modpow(P - 2u64, P);
+        let P: u128 = prime.into();
+        let mut inv_roots2: Vec<T> = Vec::new();
+        let inv_root2: u128 = root2.into()
+                                   .modpow(P - 2u128, P);
         for i in 0..degree2 {
-            let wi = inv_root2.modpow(i as u64, P);
-            inv_roots2.push(wi);    
+            let wi = inv_root2.modpow(i as u128, P);
+            inv_roots2.push(wi.try_into().unwrap());    
         }
         //Constant memory __constant
 
-        let mut roots3: Vec<u64> = Vec::new();
+        let mut roots3: Vec<T> = Vec::new();
         for i in 0..degree3 {
-            let wi = root3.modpow(i as u64, P);
-            roots3.push(wi);
+            let wi: u128 = root3.into()
+                                .modpow(i as u128, P);
+            roots3.push(wi.try_into().unwrap());
         }
 
         Some(OclContext {
@@ -130,20 +135,20 @@ impl OclContext{
         })
     }
 
-    pub fn share(&mut self, secrets: &[u64]) -> Vec<Vec<u64>> {   
+    pub fn share(&mut self, secrets: &[T]) -> Vec<Vec<T>> {   
         /* Input Format
            [x0, ..., xv]
         */
         assert!(secrets.len() == self.V);
         let L2 = self.degree2;
-        let L2_bit_mum = ((L2 as f64).log2().trunc() as u64)
-                                    ;
+        let L2_bit_mum: T = ((L2 as f64).log2().trunc() as u128)
+                                    .try_into().unwrap();
         let L3 = self.degree3;
         let B = self.V / self.L;
         println!("V = {:?}, B = {}, L = {}", self.V, B, self.L);
         
         let ref mut ocl_pq = self.pro_que;
-        let mut secret_blocks: Vec<u64> = Vec::new();
+        let mut secret_blocks: Vec<T> = Vec::new();
         let mut rng = thread_rng();
         for i in 0..B {
             for j in 0..self.L {
@@ -153,7 +158,7 @@ impl OclContext{
             randomness is no greater than max of T to prevent overflow
             */
             for _ in self.L..L2 {
-                secret_blocks.push(rng.gen_range(0u64, self.prime));
+                secret_blocks.push(rng.gen_range(T::zero(), self.prime));
             }
         }
         println!("secret_blocks {:?}\n roots2 {:?}", secret_blocks, self.roots2);
@@ -161,9 +166,9 @@ impl OclContext{
         // set work dimension
         ocl_pq.set_dims(B);
         // copy matrix to device
-        let mut source: Buffer<u64>;
-        let roots2: Buffer<u64>;
-        let roots3: Buffer<u64>;
+        let mut source: Buffer<T>;
+        let roots2: Buffer<T>;
+        let roots3: Buffer<T>;
         unsafe {
             source = Buffer::new(
                 &ocl_pq.queue().clone(),
@@ -212,7 +217,7 @@ impl OclContext{
         println!("Buffer reads [B*L2]");
         let buff_start = time::get_time();
         // Read dests from the device into dest_buffer's local vector:
-        let mut poly = vec![0u64; (L2*B) as usize];
+        let mut poly = vec![T::zero(); (L2*B) as usize];
         source.read(&mut poly).enq().unwrap();
         print_elapsed("queue unfinished", buff_start);
         ocl_pq.queue().finish();
@@ -223,7 +228,7 @@ impl OclContext{
    
         for i in 0..B {
             for _ in L2 ..L3 {
-                poly.insert(i*L3, 0u64);
+                poly.insert(i*L3, T::zero());
             }
         }
         assert!(poly.len() == B * L3);
@@ -261,7 +266,7 @@ impl OclContext{
         println!("Buffer reads [B*L3]");
         let buff_start = time::get_time();
         // Read dests from the device into dest_buffer's local vector:
-        let mut res = vec![0u64; B * L3];
+        let mut res = vec![T::zero(); B * L3];
         source.read(&mut res).enq().unwrap();
         print_elapsed("queue unfinished", buff_start);
         ocl_pq.queue().finish();
@@ -274,8 +279,14 @@ impl OclContext{
         ret
     }
 
-    // pub fn share2(&mut self, secrets: &[T]) -> Vec<Vec<u64>> {   u64 = ((L2 as f64).log2().trunc() as u64)
-    //                                 ;
+    // pub fn share2(&mut self, secrets: &[T]) -> Vec<Vec<T>> {   
+    //     /* Input Format
+    //        [x0, ..., xv]
+    //     */
+    //     assert!(secrets.len() == self.V);
+    //     let L2 = self.degree2;
+    //     let L2_bit_mum: T = ((L2 as f64).log2().trunc() as u128)
+    //                                 .try_into().unwrap();
     //     let L3 = self.degree3;
     //     let B = self.V / self.L;
     //     println!("V = {:?}, B = {}, L = {}", self.V, B, self.L);
@@ -291,7 +302,7 @@ impl OclContext{
     //         randomness is no greater than max of T to prevent overflow
             
     //         for _ in self.L..L2 {
-    //             secret_blocks.push(rng.gen_range(0u64, self.prime));
+    //             secret_blocks.push(rng.gen_range(T::zero(), self.prime));
     //         }
     //     }
     //     let mut ret: Vec<Vec<T>> = vec![Vec::with_capacity(B); self.N];
@@ -300,23 +311,24 @@ impl OclContext{
     //         */
     //         let mut poly = ntt::inverse2(block.to_vec(), self.prime, &self.roots2);
     //         for _ in L2 ..L3 {
-    //             poly.push(0u64);
+    //             poly.push(T::zero());
     //         }
     //         /* share with radix3_DFT
     //         */
     //         let mut shares = ntt::transform3(poly, self.prime, &self.roots3);
     //         ret[i] = shares[1..self.N+1].to_vec();
     //     }
-    //     retu64    // }
+    //     ret
+    // }
 
     // Comput rootThrees
     // Shares should in order
-    pub fn reconstruct(&mut self, shares: &Vec<Vec<u64>>) -> Vec<u64> {
+    pub fn reconstruct(&mut self, shares: &Vec<Vec<T>>) -> Vec<T> {
         assert!(shares.len() >= self.roots3.len());
         let B = self.V/self.L;
         let mut transposed = vec![Vec::with_capacity(B); self.N];
         for i in 0..B {
-            transposed[i] = shares.iter().map(|s: &Vec<u64>| s[i]).collect::<Vec<u64>>();
+            transposed[i] = shares.iter().map(|s: &Vec<T>| s[i]).collect::<Vec<T>>();
         }
         let mut ret = Vec::new();
         for t in transposed {
@@ -327,14 +339,16 @@ impl OclContext{
 
 }
 
-pub fn lagrange_interpolation(points: &Vec<u64>, values: &Vec<u64>, roots: &Vec<u64>, P:u64) -> Vec<u64> 
+pub fn lagrange_interpolation<T>(points: &Vec<T>, values: &Vec<T>, roots: &Vec<T>, P: T) -> Vec<T> 
+    where T: Unsigned + Copy + Debug + PartialOrd + ModPow + TryFrom<u128>,
+        <T as TryFrom<u128>>::Error:Debug
 {
     assert!(points.len() == values.len());
     let L = points.len();
-    let mut denominators: Vec<u64> = Vec::new();
+    let mut denominators: Vec<T> = Vec::new();
 
     for i in 0..L {
-        let mut d = 1u64;
+        let mut d = T::one();
         for j in 0..L {
             if i != j {
                 if points[i] >= points[j]{
@@ -345,15 +359,15 @@ pub fn lagrange_interpolation(points: &Vec<u64>, values: &Vec<u64>, roots: &Vec<
                 d = d % P;
             }
         }
-        d = d.modpow(P - 2u64, P);
+        d = d.modpow(P - 2u128.try_into().unwrap(), P);
         denominators.push(d);
     }
 
-    let mut evals: Vec<u64> = Vec::new();
+    let mut evals: Vec<T> = Vec::new();
     for r in roots {
-        let mut eval = 0u64;
+        let mut eval = T::zero();
         for i in 0..L {
-            let mut li = 1u64;
+            let mut li = T::one();
             for j in 0..L {
                 if i != j {
                     if *r >= points[j] {
