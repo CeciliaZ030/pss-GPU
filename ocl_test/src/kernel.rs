@@ -1,14 +1,14 @@
 pub static NTT_INVERSE2: &str = r#"
 
 void radix2_bitreverse (
-	__global ulong* source,
-  	const ulong base,
-  	const ulong L)
+	__global uint* source,
+  	const uint base,
+  	const uint L)
 {
 	int j = 0;
 	for (int i = 0; i < L; i++) {
 		if (j > i) {
-			ulong temp = source[base+i];
+			uint temp = source[base+i];
 			source[base+i] = source[base+j];
 			source[base+j] = temp;
       	}
@@ -23,13 +23,13 @@ void radix2_bitreverse (
 
 
 void radix2_dft (
-	__global ulong* source,
-	__global const ulong* roots2,
-	const ulong base,
-  	const ulong L,
-	const ulong L_inv,
-  	const ulong L_bit_num,
-  	const ulong P)
+	__global uint* source,
+	__global const uint* roots2,
+	const uint base,
+  	const uint L,
+	const uint L_inv,
+  	const uint L_bit_num,
+  	const uint P)
 {
 	for (int s = 0; s < L_bit_num + 1; s++) {
 		int m = (int) pown((float) 2, s);
@@ -38,8 +38,8 @@ void radix2_dft (
 		while (i < L) {
 			int j = 0;
 			while (j < m/2) {
-				ulong t = roots2[base+j*(L/m)] * source[base+i+j+m/2] % P;
-				ulong u = source[base+i+j] % P;
+				uint t = roots2[base+j*(L/m)] * source[base+i+j+m/2] % P;
+				uint u = source[base+i+j] % P;
 				source[i+j] = (u + t) % P;
 				if (u <= t) {
 					source[base+i+j+m/2] = (P + u - t) % P;
@@ -64,12 +64,12 @@ void radix2_dft (
 //c preprocessor
 
 __kernel void ntt_inverse2 (
-	__global ulong* source,
-	__global ulong* roots2,		//inversed
-  	const ulong L,
-  	const ulong L_inv,
-  	const ulong L_bit_num,
-  	const ulong P)
+	__global uint* source,
+	__global uint* roots2,		//inversed
+  	const uint L,
+  	const uint L_inv,
+  	const uint L_bit_num,
+  	const uint P)
 {
 	uint const base = get_global_id(0) * L;
 	printf("%d", get_local_id(0));
@@ -88,9 +88,9 @@ __kernel void ntt_inverse2 (
 pub static NTT_TRANSFORM3_PART1: &str = r#"
 
 void radix3_bitreverse (
-	__global ulong* source, 
-	const ulong base,
-  	const ulong L)
+	__global uint* source, 
+	const uint base,
+  	const uint L)
 {
 	int L_trigits_num ="#;
 
@@ -100,7 +100,7 @@ pub static NTT_TRANSFORM3_PART3: &str = r#"] = {0};
 	int t = 0;
 	for (int i = 0; i < L; i++) {
 		if (t > i) {
-			ulong temp = source[base+i];
+			uint temp = source[base+i];
 			source[base+i] = source[base+t];
 			source[base+t] = temp;
       	}
@@ -119,14 +119,14 @@ pub static NTT_TRANSFORM3_PART3: &str = r#"] = {0};
 
 
 void radix3_dft (
-	__global ulong* source,
-	__global ulong* roots3,
-	const ulong base,
-	const ulong L,
-	const ulong P)
+	__global uint* source,
+	__global uint* roots3,
+	const uint base,
+	const uint L,
+	const uint P)
 {
-	ulong w = roots3[L/3];
-	ulong w_sqr = roots3[L/3*2];
+	uint w = roots3[L/3];
+	uint w_sqr = roots3[L/3*2];
 
 	int i = 1;
 	while (i < L) {
@@ -135,9 +135,9 @@ void radix3_dft (
 		for (int j = 0; j < i; j++) {
 			int pair = j;
 			while (pair < L) {
-				ulong x = source[base+pair];
-				ulong y = source[base+pair+1] * roots3[j*stride] % P;
-				ulong z = source[base+pair+2*i] * roots3[2*j*stride] % P;
+				uint x = source[base+pair];
+				uint y = source[base+pair+1] * roots3[j*stride] % P;
+				uint z = source[base+pair+2*i] * roots3[2*j*stride] % P;
 
 				source[base+pair] 	  = (x + y + z) % P;
 				source[base+pair+i]   = (x % P + w * y % P + w_sqr * z % P) % P;
@@ -151,10 +151,10 @@ void radix3_dft (
 }
 
 __kernel void ntt_transform3 (
-	__global ulong* source, 
-	__global ulong* roots3,
-  	const ulong L,
-  	const ulong P)
+	__global uint* source, 
+	__global uint* roots3,
+  	const uint L,
+  	const uint P)
 {
 	uint const base = get_global_id(0) * L;
 	// printf("%d", get_local_id(0));
