@@ -75,7 +75,7 @@ __kernel void ntt_inverse2 (
 	printf("%d", get_local_id(0));
 
 	for (int i = 0; i < L; i++) {
-		printf("%d, %d %d\n", i, source[i], roots2);
+		printf("%d, source %d roots2 %d\n", i, source[i], roots2[i]);
 	}
 
 	radix2_bitreverse(source, base, L);
