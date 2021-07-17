@@ -40,7 +40,7 @@ pub struct OclContext<T> {
 impl<T> OclContext<T> 
 where T: Unsigned + Copy + Debug + TryFrom<u128> + Into<u128> + 
         SampleUniform + PartialOrd + OclPrm + HasMax + ModPow,
-      <T as TryFrom<u128>>::Error: Debug
+      <T as TryFrom<u128>>::Error:Debug
 {
     /* Use u128 because any T implements Into<u128>
     */
@@ -48,6 +48,7 @@ where T: Unsigned + Copy + Debug + TryFrom<u128> + Into<u128> +
     pub fn new(prime: T, root2: T, root3:T, 
                degree2: usize, degree3: usize, total_len: usize, packing_len: usize, num_shares: usize) -> Option<OclContext<T>> {
         
+        println!("{:?} {:?} {:?} {:?} {:?}", degree2, degree3, total_len, packing_len, num_shares);
         // wich Device should we choose?
         // the one with the most Compute units!
         let mut compute_units = 0;
@@ -134,7 +135,7 @@ where T: Unsigned + Copy + Debug + TryFrom<u128> + Into<u128> +
         })
     }
 
-    pub fn share(&mut self, secrets: &[T]){   
+    pub fn share(&mut self, secrets: &[T]) -> Vec<Vec<T>> {   
         /* Input Format
            [x0, ..., xv]
         */
@@ -160,8 +161,7 @@ where T: Unsigned + Copy + Debug + TryFrom<u128> + Into<u128> +
                 secret_blocks.push(rng.gen_range(T::zero(), self.prime));
             }
         }
-        //println!("secret_blocks {:?}\n", secret_blocks);
-
+        println!("secret_blocks {:?}\n roots2 {:?}", secret_blocks, self.roots2);
 
         // set work dimension
         ocl_pq.set_dims(B);
@@ -222,8 +222,9 @@ where T: Unsigned + Copy + Debug + TryFrom<u128> + Into<u128> +
         print_elapsed("queue unfinished", buff_start);
         ocl_pq.queue().finish();
         print_elapsed("queue finished", buff_start);
+        println!("source {:?}", source);
   
-    //__________________________________________________
+        //__________________________________________________
    
         for i in 0..B {
             for _ in L2 ..L3 {
@@ -265,16 +266,125 @@ where T: Unsigned + Copy + Debug + TryFrom<u128> + Into<u128> +
         println!("Buffer reads [B*L3]");
         let buff_start = time::get_time();
         // Read dests from the device into dest_buffer's local vector:
-        let mut ret = vec![T::zero(); B * L3];
-        source.read(&mut ret).enq().unwrap();
+        let mut res = vec![T::zero(); B * L3];
+        source.read(&mut res).enq().unwrap();
         print_elapsed("queue unfinished", buff_start);
         ocl_pq.queue().finish();
         print_elapsed("queue finished", buff_start);
         
-        //println!("{:?}", ret);
-
-        // return ret;
+        let mut ret = vec![Vec::with_capacity(B); self.N];
+        for i in 0..self.N {
+            ret[i].extend(&res[i*B..(i+1)*B]);
+        }
+        ret
     }
+
+    // pub fn share2(&mut self, secrets: &[T]) -> Vec<Vec<T>> {   
+    //     /* Input Format
+    //        [x0, ..., xv]
+    //     */
+    //     assert!(secrets.len() == self.V);
+    //     let L2 = self.degree2;
+    //     let L2_bit_mum: T = ((L2 as f64).log2().trunc() as u128)
+    //                                 .try_into().unwrap();
+    //     let L3 = self.degree3;
+    //     let B = self.V / self.L;
+    //     println!("V = {:?}, B = {}, L = {}", self.V, B, self.L);
+        
+    //     let ref mut ocl_pq = self.pro_que;
+    //     let mut secret_blocks: Vec<T> = Vec::new();
+    //     let mut rng = thread_rng();
+    //     for i in 0..B {
+    //         for j in 0..self.L {
+    //             secret_blocks.push(secrets[i*self.L+j]);
+    //         }
+    //          Pack randomness for unused transform points
+    //         randomness is no greater than max of T to prevent overflow
+            
+    //         for _ in self.L..L2 {
+    //             secret_blocks.push(rng.gen_range(T::zero(), self.prime));
+    //         }
+    //     }
+    //     let mut ret: Vec<Vec<T>> = vec![Vec::with_capacity(B); self.N];
+    //     for (i, block) in secret_blocks.iter().enumerate() {
+    //         /* use radix2_DFT to from the poly
+    //         */
+    //         let mut poly = ntt::inverse2(block.to_vec(), self.prime, &self.roots2);
+    //         for _ in L2 ..L3 {
+    //             poly.push(T::zero());
+    //         }
+    //         /* share with radix3_DFT
+    //         */
+    //         let mut shares = ntt::transform3(poly, self.prime, &self.roots3);
+    //         ret[i] = shares[1..self.N+1].to_vec();
+    //     }
+    //     ret
+    // }
+
+    // Comput rootThrees
+    // Shares should in order
+    pub fn reconstruct(&mut self, shares: &Vec<Vec<T>>) -> Vec<T> {
+        assert!(shares.len() >= self.roots3.len());
+        let B = self.V/self.L;
+        let mut transposed = vec![Vec::with_capacity(B); self.N];
+        for i in 0..B {
+            transposed[i] = shares.iter().map(|s: &Vec<T>| s[i]).collect::<Vec<T>>();
+        }
+        let mut ret = Vec::new();
+        for t in transposed {
+            ret.extend(lagrange_interpolation(&self.roots3, &t, &self.roots2, self.prime));
+        }
+        ret
+    }
+
+}
+
+pub fn lagrange_interpolation<T>(points: &Vec<T>, values: &Vec<T>, roots: &Vec<T>, P: T) -> Vec<T> 
+    where T: Unsigned + Copy + Debug + PartialOrd + ModPow + TryFrom<u128>,
+        <T as TryFrom<u128>>::Error:Debug
+{
+    assert!(points.len() == values.len());
+    let L = points.len();
+    let mut denominators: Vec<T> = Vec::new();
+
+    for i in 0..L {
+        let mut d = T::one();
+        for j in 0..L {
+            if i != j {
+                if points[i] >= points[j]{
+                    d = d * (points[i] - points[j]);
+                } else {
+                    d = d * ((points[i] + P - points[j]) % P);
+                }
+                d = d % P;
+            }
+        }
+        d = d.modpow(P - 2u128.try_into().unwrap(), P);
+        denominators.push(d);
+    }
+
+    let mut evals: Vec<T> = Vec::new();
+    for r in roots {
+        let mut eval = T::zero();
+        for i in 0..L {
+            let mut li = T::one();
+            for j in 0..L {
+                if i != j {
+                    if *r >= points[j] {
+                        li = li * (*r - points[j]);
+                    } else {
+                        li = li * ((*r + P - points[j]) % P);
+                    }
+                    li = li % P;
+                }
+            }
+            li = li * denominators[i] % P;
+            eval = eval + (li * values[i] % P);
+        }
+        evals.push(eval % P);
+    }
+    
+    evals
 }
 
 fn print_elapsed(title: &str, start: time::Timespec) {
